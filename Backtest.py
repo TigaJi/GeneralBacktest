@@ -1,16 +1,36 @@
-import pandas
-
+import pandas as pd
+import numpy as np
+import random
+import sys
+import os
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
+from oauth2client.service_account import ServiceAccountCredentials
 
 class Backtest:
-    def __init__(self,price_data,initial_amount,strategy):
+    def __init__(self,price_data,strategy,initial_amount = 100000, has_tc = True, is_print = False):
         if self.check_input_data(price_data) == True:
             self.df = price_data
         else:
             return
+        
+        #k,v : String of ticker, a Position type instance
         self.positions = {}
+        
+        
         self.cash = initial_amount
         self.values = []
         self.strategy = strategy
+        
+        if has_tc == True:
+            self.tc = 0.002
+        else:
+            self.tc = 0
+        
+        self.transaction_history = pd.DataFrame(columns = ["dt","ticker","type","price","shares","amount","cash_left","transaction_cost","pnl"])
+        self.portfolio_tracker = pd.DataFrame(columns = ["dt","bid_count","position_count","cash_value","positions_value","total_value","bah"])
+        
+        self.is_print = is_print
     
     def check_input_data(self,df):
         if df.index.inferred_type != "datetime64":
@@ -29,27 +49,75 @@ class Backtest:
         total_position_value = sum([pos.price*pos.shares for pos in self.positions.values()])
         self.values.append(total_position_value+self.cash)
     
-    def show_status(self,is_print):
+    def show_status(self):
         print("cash: {}".format(self.cash))
         print("# of positions: {}".format(len(self.positions)))
         
-        if is_print == True:
-            for pos in self.positions.values():
-                pos.show()
+        for pos in self.positions.values():
+            pos.show()
         total_position_value = sum([pos.price*pos.shares for pos in self.positions.values()])
         print("total_position_value: {}".format(total_position_value))
     
+    def record_transaction(self,ti,bid,pnl):
+        record = [ti,bid.ticker,bid.bid_type,bid.price,bid.shares,bid.price*bid.shares,self.cash,bid.price*bid.shares*self.tc,pnl]
+        self.transaction_history.loc[len(self.transaction_history)] = record
         
+    def update_tracker(self,ti,bid_list,positions,cash):
+        rets = [end/start for start,end in zip(self.df.iloc[0].values,self.df.loc[ti].values)]
+        bah_value = sum(([100000//len(self.df.columns)*ret for ret in rets]))
+        positions_value = sum([pos.price*pos.shares for pos in self.positions.values()])
+        record = [ti,len(bid_list),len(positions),cash,positions_value,positions_value+cash,bah_value]
+        self.portfolio_tracker.loc[len(self.portfolio_tracker)] = record
+    
+    def upload_to_dashboard(self,name):
+        if len(self.portfolio_tracker) != len(self.df):
+            print("Unable to upload: Backtest is unfinished.")
+            return
+        if "algo-trade-dashboard-80cae071e907.json" not in os.listdir():
+            print("Unable to upload: Couldn't find credential file (algo-trade-dashboard-80cae071e907.json)")
+            return
+        
+        
+        self.portfolio_tracker.to_csv(name+"_backtest_result.csv")
+        
+
+
+        gauth = GoogleAuth()
+        scope = ['https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/drive',
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/drive.metadata'
+          ]
+        
+
+        gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name("algo-trade-dashboard-80cae071e907.json", scope)
+        drive = GoogleDrive(gauth)
+
+        file_list = drive.ListFile({'q': "'root' in parents and trashed=false"}).GetList()
+
+        for file in file_list:
+            if name+"_backtest_result.csv" == file['title']:
+                file.SetContentFile(name+"_backtest_result.csv")
+                print("Data uploaded.")
+                return
+
+        f1 = drive.CreateFile({'name':name+"_backtest_result.csv"})
+
+        f1.SetContentFile(name+"_backtest_result.csv")
+        f1.Upload()
+        os.remove(name+"_backtest_result.csv")
+        print("Data uploaded.")
+     
     def backtest(self):
+    
         for ti in self.df.index:
-            print("=====================================================================")
-            print(ti)
+            
+            if self.is_print == True:
+                print("=====================================================================")
+                print(ti)
             self.update_positions(ti)
             
-            
-            
-            #if ti.hour == 9:
-            self.show_status(is_print = False)
+            #self.show_status()
             
             
             
@@ -60,48 +128,72 @@ class Backtest:
             
             #process the bids
             for bid in bid_list:
-                if bid.shares == 0:
-                    continue
-                
                 #if already have a positionn
                 if bid.ticker in self.positions.keys():
-                    #pos = self.positions[bid.ticker]
+                    pos = self.positions[bid.ticker]
                     
                     #if increase position
                     if bid.bid_type == 1:
                         cost = bid.shares * bid.price
-                        if self.cash < cost:
+                        if self.cash < cost * (1+self.tc):
                             print("Not enough cash to build a position for "+bid.ticker)
                             continue
-                        self.cash -= cost
                         
-                        self.positions[bid.ticker].change_position(bid)
+                        #update cash
+                        self.cash -= cost * (1+self.tc)
+                        
+                        #update position
+                        pos.change_position(bid)
+                        self.record_transaction(ti,bid,0)
                     
                     #if decrease position
                     else:
-
+                        income = bid.shares * bid.price
                         if self.positions[bid.ticker].shares < bid.shares:
                             print("Try to sell {} shares, but only got {} shares.".format(bid.shares,self.positions[bid.ticker].shares))
                             continue
-                            
-                        self.positions[bid.ticker].change_position(bid)
-                        self.cash += bid.shares * bid.price
                         
-                        if self.positions[bid.ticker].shares == 0:
-                            del self.positions[bid.ticker]      
+                        #update cash
+                        self.cash += income
+                        self.cash -= income*self.tc
+                        
+                        #update position,and get a cost
+
+                        temp_cost = pos.change_position(bid)
+                       
+                        #calculate pnl
+                        pnl = income-temp_cost
+                        
+                        #record this transaction
+                        self.record_transaction(ti,bid,pnl)
+                        if pos.shares == 0:
+                            del pos
+                            del self.positions[bid.ticker]
+                    
                     
                 
                 #if not have a position yet
                 else:
-                    if bid.bid_type == 0:
-                        print("Can't sell, don't have a position yet.")
-                        continue
                     cost = bid.shares * bid.price
-                    if self.cash < cost:
+                    if self.cash < cost * (1+self.tc):
                         print("Not enough cash to build a position for "+bid.ticker)
                         continue
-                    self.cash -= cost
+
+                    #update cash
+                    self.cash -= cost * (1+self.tc)
+
+                    #build position
                     self.positions[bid.ticker] = Position(bid)
+                    
+                    #record this transaction
+                    self.record_transaction(ti,bid,0)
+            
+            self.update_tracker(ti,bid_list,self.positions,self.cash)
+    
+            
+
+                    
+
 
 class Bid:
     def __init__(self,ticker,price,shares,bid_type):
@@ -111,10 +203,6 @@ class Bid:
         self.bid_type = bid_type
     
     def show(self):
-        if self.bid_type == 1:
-            print("buying:")
-        else:
-            print("selling:")
         print("Ticker: {}".format(self.ticker))
         print("Shares: {}".format(self.shares))
         print("price: {}".format(self.price))
@@ -124,19 +212,52 @@ class Position:
         self.ticker = bid.ticker
         self.shares = bid.shares
         self.price = bid.price
-
+        
+        #k，v: price, number of shares purchased at that price
+        self.cost = {}
+        self.update_cost(bid)
     
     def change_position(self,bid):
         if bid.bid_type == 1:
             self.shares += bid.shares
+            self.update_cost(bid)
         
         if bid.bid_type == 0:
-            if self.shares < bid.shares:
-                print("WARNING")
-                bid.show()
-                self.show()
             self.shares -= bid.shares
-    
+            return self.update_cost(bid)
+        
+   
+    def update_cost(self,bid):
+        #buy
+        if bid.bid_type == 1:
+            #if have purchased at this price
+            if bid.price in self.cost.keys():
+                self.cost[bid.price] += bid.shares
+            else:
+                self.cost[bid.price] = bid.shares
+            
+                
+        #sell
+        else:
+            
+            #if empty position
+            if bid.shares == self.shares:
+                #weighted average
+                return sum([i*j for i,j in zip(self.cost.keys(),self.cost.values())])
+            else:
+                shares_left = bid.shares
+                temp_cost = 0
+                for price in sorted(self.cost.keys()):
+                    if shares_left > self.cost[price]:
+                        shares_left -= self.cost[price]
+                        temp_cost += price * self.cost[price]
+                        del self.cost[price]
+                    else:
+                        self.cost[price] -= shares_left
+                        temp_cost += price * shares_left
+                return temp_cost
+                    
+  
     def show(self):
         print("Ticker: {}".format(self.ticker))
         print("Shares: {}".format(self.shares))
