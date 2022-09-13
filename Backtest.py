@@ -8,7 +8,9 @@ from pydrive.drive import GoogleDrive
 from oauth2client.service_account import ServiceAccountCredentials
 
 class Backtest:
-    def __init__(self,price_data,strategy,initial_amount = 100000, has_tc = True, is_print = False):
+    def __init__(self,price_data,strategy,initial_amount = 100000, has_tc = True):
+        
+        
         if self.check_input_data(price_data) == True:
             self.df = price_data
         else:
@@ -17,20 +19,25 @@ class Backtest:
         #k,v : String of ticker, a Position type instance
         self.positions = {}
         
-        
+        #cash
         self.cash = initial_amount
-        self.values = []
+        
+        #strategy
         self.strategy = strategy
         
+        #have transaction cost or not 
         if has_tc == True:
             self.tc = 0.002
         else:
             self.tc = 0
         
+        #round for backtest step
+        self.current = 0
+        
+        #dfs to record
         self.transaction_history = pd.DataFrame(columns = ["dt","ticker","type","price","shares","amount","cash_left","transaction_cost","pnl"])
         self.portfolio_tracker = pd.DataFrame(columns = ["dt","bid_count","position_count","cash_value","positions_value","total_value","bah"])
         
-        self.is_print = is_print
     
     def check_input_data(self,df):
         if df.index.inferred_type != "datetime64":
@@ -45,9 +52,6 @@ class Backtest:
         current_price = self.df.loc[ti]
         for position in list(self.positions.values()):
             position.price = current_price[position.ticker]
-        
-        total_position_value = sum([pos.price*pos.shares for pos in self.positions.values()])
-        self.values.append(total_position_value+self.cash)
     
     def show_status(self):
         print("cash: {}".format(self.cash))
@@ -96,8 +100,11 @@ class Backtest:
         file_list = drive.ListFile({'q': "'root' in parents and trashed=false"}).GetList()
 
         for file in file_list:
+            id = file['id']
             if name+"_backtest_result.csv" == file['title']:
-                file.SetContentFile(name+"_backtest_result.csv")
+                f1 = drive.CreateFile({'name':name+"_backtest_result.csv",'id':id})
+                f1.SetContentFile(name+"_backtest_result.csv")
+                f1.Upload()
                 print("Data uploaded.")
                 return
 
@@ -107,73 +114,16 @@ class Backtest:
         f1.Upload()
         os.remove(name+"_backtest_result.csv")
         print("Data uploaded.")
-     
-    def backtest(self):
     
-        for ti in self.df.index:
-            
-            if self.is_print == True:
-                print("=====================================================================")
-                print(ti)
-            self.update_positions(ti)
-            
-            #self.show_status()
-            
-            
-            
-            #where the strategy kick in and gives a list of bids
-            bid_list = self.strategy(ti,self.df.loc[:ti],self.positions,self.cash)
-            
-            
-            
-            #process the bids
-            for bid in bid_list:
-                #if already have a positionn
-                if bid.ticker in self.positions.keys():
-                    pos = self.positions[bid.ticker]
-                    
-                    #if increase position
-                    if bid.bid_type == 1:
-                        cost = bid.shares * bid.price
-                        if self.cash < cost * (1+self.tc):
-                            print("Not enough cash to build a position for "+bid.ticker)
-                            continue
-                        
-                        #update cash
-                        self.cash -= cost * (1+self.tc)
-                        
-                        #update position
-                        pos.change_position(bid)
-                        self.record_transaction(ti,bid,0)
-                    
-                    #if decrease position
-                    else:
-                        income = bid.shares * bid.price
-                        if self.positions[bid.ticker].shares < bid.shares:
-                            print("Try to sell {} shares, but only got {} shares.".format(bid.shares,self.positions[bid.ticker].shares))
-                            continue
-                        
-                        #update cash
-                        self.cash += income
-                        self.cash -= income*self.tc
-                        
-                        #update position,and get a cost
+    
+    def process_bids(self,ti,bid_list):
+        for bid in bid_list:
+            #if already have a position
+            if bid.ticker in self.positions.keys():
+                pos = self.positions[bid.ticker]
 
-                        temp_cost = pos.change_position(bid)
-                       
-                        #calculate pnl
-                        pnl = income-temp_cost
-                        
-                        #record this transaction
-                        self.record_transaction(ti,bid,pnl)
-                        if pos.shares == 0:
-                            del pos
-                            del self.positions[bid.ticker]
-                    
-                    
-                
-                #if not have a position yet
-                else:
+                #if increase position
+                if bid.bid_type == 1:
                     cost = bid.shares * bid.price
                     if self.cash < cost * (1+self.tc):
                         print("Not enough cash to build a position for "+bid.ticker)
@@ -182,13 +132,79 @@ class Backtest:
                     #update cash
                     self.cash -= cost * (1+self.tc)
 
-                    #build position
-                    self.positions[bid.ticker] = Position(bid)
-                    
-                    #record this transaction
+                    #update position
+                    pos.change_position(bid)
                     self.record_transaction(ti,bid,0)
-            
-            self.update_tracker(ti,bid_list,self.positions,self.cash)
+
+                #if decrease position
+                else:
+                    income = bid.shares * bid.price
+                    if self.positions[bid.ticker].shares < bid.shares:
+                        print("Try to sell {} shares, but only got {} shares.".format(bid.shares,self.positions[bid.ticker].shares))
+                        continue
+
+                    #update cash
+                    self.cash += income
+                    self.cash -= income*self.tc
+
+                    #update position,and get a cost
+
+                    temp_cost = pos.change_position(bid)
+
+                    #calculate pnl
+                    pnl = income-temp_cost
+
+                    #record this transaction
+                    self.record_transaction(ti,bid,pnl)
+                    if pos.shares == 0:
+                        del pos
+                        del self.positions[bid.ticker]
+
+            #if not have a position yet
+            else:
+                cost = bid.shares * bid.price
+                if self.cash < cost * (1+self.tc):
+                    print("Not enough cash to build a position for "+bid.ticker)
+                    continue
+
+                #update cash
+                self.cash -= cost * (1+self.tc)
+
+                #build position
+                self.positions[bid.ticker] = Position(bid)
+
+                #record this transaction
+                self.record_transaction(ti,bid,0)
+
+        self.update_tracker(ti,bid_list,self.positions,self.cash)
+        
+        
+        
+        
+    
+    
+    def backtest_step(self):
+        #current ti
+        ti = self.df.index[self.current]
+        
+        self.update_positions(ti)
+        bid_list = self.strategy(ti,self.df.loc[:ti],self.positions,self.cash)
+        self.process_bids(bid_list = bid_list,ti = ti)
+        self.current+=1
+        
+        
+        
+        
+        
+        
+        
+        
+        
+    def backtest_full(self):
+        for ti in self.df.index:
+            self.update_positions(ti)
+            bid_list = self.strategy(ti,self.df.loc[:ti],self.positions,self.cash)
+            self.process_bids(bid_list = bid_list,ti = ti)
     
 
 class Bid:
@@ -198,6 +214,9 @@ class Bid:
         self.shares = shares
         self.bid_type = bid_type
     
+    def __del__(self):
+        return
+
     def show(self):
         if self.bid_type == 1:
             print("Buying:")
@@ -210,14 +229,16 @@ class Bid:
 class Position:
     def __init__(self,bid):
         self.ticker = bid.ticker
-        self.share = bid.shares
+        self.shares = bid.shares
         self.price = bid.price
         
         #k，v: price, number of shares purchased at that price
         self.purchase_history = {}
         self.wa_cost_price = bid.price
         self.update_cost(bid)
-    
+
+
+
     def change_position(self,bid):
         self.price = bid.price
         if bid.bid_type == 1:
@@ -227,11 +248,11 @@ class Position:
         
         if bid.bid_type == 0:
             self.shares -= bid.shares
-            return self.update_cost(bid)
-        
-        
 
-   
+            return self.update_cost(bid)
+
+
+        
     def update_cost(self,bid):
         #buy
         if bid.bid_type == 1:
@@ -276,4 +297,3 @@ class Position:
         print("Price\tShares")
         for item in self.purchase_history.items():
             print(str(item[0])+'\t'+str(item[1]))
-            
