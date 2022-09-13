@@ -190,10 +190,6 @@ class Backtest:
             
             self.update_tracker(ti,bid_list,self.positions,self.cash)
     
-            
-
-                    
-
 
 class Bid:
     def __init__(self,ticker,price,shares,bid_type):
@@ -203,38 +199,48 @@ class Bid:
         self.bid_type = bid_type
     
     def show(self):
+        if self.bid_type == 1:
+            print("Buying:")
+        else:
+            print("Selling")
         print("Ticker: {}".format(self.ticker))
         print("Shares: {}".format(self.shares))
-        print("price: {}".format(self.price))
+        print("Price: {}".format(self.price))
 
 class Position:
     def __init__(self,bid):
         self.ticker = bid.ticker
-        self.shares = bid.shares
+        self.share = bid.shares
         self.price = bid.price
         
         #k，v: price, number of shares purchased at that price
-        self.cost = {}
+        self.purchase_history = {}
+        self.wa_cost_price = bid.price
         self.update_cost(bid)
     
     def change_position(self,bid):
+        self.price = bid.price
         if bid.bid_type == 1:
             self.shares += bid.shares
             self.update_cost(bid)
+            
         
         if bid.bid_type == 0:
             self.shares -= bid.shares
             return self.update_cost(bid)
         
+        
+
    
     def update_cost(self,bid):
         #buy
         if bid.bid_type == 1:
             #if have purchased at this price
-            if bid.price in self.cost.keys():
-                self.cost[bid.price] += bid.shares
+            if bid.price in self.purchase_history.keys():
+                self.purchase_history[bid.price] += bid.shares
             else:
-                self.cost[bid.price] = bid.shares
+                self.purchase_history[bid.price] = bid.shares
+            self.wa_cost_price = sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])/self.shares
             
                 
         #sell
@@ -243,22 +249,31 @@ class Position:
             #if empty position
             if bid.shares == self.shares:
                 #weighted average
-                return sum([i*j for i,j in zip(self.cost.keys(),self.cost.values())])
+                self.wa_cost_price = sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])/self.shares
+                return sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])
             else:
                 shares_left = bid.shares
                 temp_cost = 0
-                for price in sorted(self.cost.keys()):
-                    if shares_left > self.cost[price]:
-                        shares_left -= self.cost[price]
-                        temp_cost += price * self.cost[price]
-                        del self.cost[price]
+                for price in sorted(self.purchase_history.keys()):
+                    if shares_left > self.purchase_history[price]:
+                        shares_left -= self.purchase_history[price]
+                        temp_cost += price * self.purchase_history[price]
+                        del self.purchase_history[price]
                     else:
-                        self.cost[price] -= shares_left
+                        self.purchase_history[price] -= shares_left
                         temp_cost += price * shares_left
+                self.wa_cost_price = sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])/self.shares
                 return temp_cost
                     
   
     def show(self):
         print("Ticker: {}".format(self.ticker))
-        print("Shares: {}".format(self.shares))
-        print("price: {}".format(self.price))
+        print("Shares_held: {}".format(self.shares))
+        print("Latest_price: {}".format(self.price))
+        print("weighted_average_cost: {}".format(self.wa_cost_price))
+        print("----------------")
+        print("Purchasing History")
+        print("Price\tShares")
+        for item in self.purchase_history.items():
+            print(str(item[0])+'\t'+str(item[1]))
+            
