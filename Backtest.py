@@ -37,7 +37,7 @@ class Backtest:
         #dfs to record
         self.transaction_history = pd.DataFrame(columns = ["dt","ticker","type","price","shares","amount","cash_left","transaction_cost","pnl"])
         self.portfolio_tracker = pd.DataFrame(columns = ["dt","bid_count","position_count","cash_value","positions_value","total_value","bah"])
-        
+        self.portfolio_tracker.loc[0] = [self.df.index[0],0,0,self.cash,0,self.cash,self.cash]
     
     def check_input_data(self,df):
         if df.index.inferred_type != "datetime64":
@@ -47,7 +47,14 @@ class Backtest:
             print("input dataframe contains null values")
             return False
         return True
-    
+
+
+    def get_latest_value(self):
+        if len(self.portfolio_tracker) == 0:
+            return self.cash
+        else:
+            return self.portfolio_tracker['total_value'].values[-1]
+
     def update_positions(self,ti):
         current_price = self.df.loc[ti]
         for position in list(self.positions.values()):
@@ -74,7 +81,7 @@ class Backtest:
         self.portfolio_tracker.loc[len(self.portfolio_tracker)] = record
     
     def upload_to_dashboard(self,name):
-        if len(self.portfolio_tracker) != len(self.df):
+        if len(self.portfolio_tracker) < len(self.df):
             print("Unable to upload: Backtest is unfinished.")
             return
         if "algo-trade-dashboard-80cae071e907.json" not in os.listdir():
@@ -139,23 +146,21 @@ class Backtest:
                 #if decrease position
                 else:
                     income = bid.shares * bid.price
-                    if self.positions[bid.ticker].shares < bid.shares:
-                        print("Try to sell {} shares, but only got {} shares.".format(bid.shares,self.positions[bid.ticker].shares))
-                        continue
-
-                    #update cash
-                    self.cash += income
-                    self.cash -= income*self.tc
 
                     #update position,and get a cost
-
                     temp_cost = pos.change_position(bid)
 
-                    #calculate pnl
-                    pnl = income-temp_cost
-
-                    #record this transaction
-                    self.record_transaction(ti,bid,pnl)
+                    #if successful
+                    if temp_cost != 0:
+                        #update cash
+                        self.cash += income
+                        self.cash -= income*self.tc
+                        #calculate pnl
+                        pnl = income-temp_cost
+                        #record this transaction
+                        self.record_transaction(ti,bid,pnl)
+                    
+                    
                     if pos.shares == 0:
                         del pos
                         del self.positions[bid.ticker]
@@ -218,6 +223,7 @@ class Bid:
         return
 
     def show(self):
+        print("---------------")
         if self.bid_type == 1:
             print("Buying:")
         else:
@@ -225,6 +231,8 @@ class Bid:
         print("Ticker: {}".format(self.ticker))
         print("Shares: {}".format(self.shares))
         print("Price: {}".format(self.price))
+        print("---------------")
+
 
 class Position:
     def __init__(self,bid):
@@ -247,9 +255,13 @@ class Position:
             
         
         if bid.bid_type == 0:
-            self.shares -= bid.shares
+            if self.shares < bid.shares:
+                print("Try to sell {} shares, but only got {} shares.".format(bid.shares,self.shares))
+                return 0
 
+            
             return self.update_cost(bid)
+            self.shares -= bid.shares
 
 
         
@@ -261,7 +273,8 @@ class Position:
                 self.purchase_history[bid.price] += bid.shares
             else:
                 self.purchase_history[bid.price] = bid.shares
-            self.wa_cost_price = sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])/self.shares
+            self.wa_cost_price = sum([i*j for i,j in self.purchase_history.items()])/self.shares
+            
             
                 
         #sell
@@ -270,8 +283,8 @@ class Position:
             #if empty position
             if bid.shares == self.shares:
                 #weighted average
-                self.wa_cost_price = sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])/self.shares
-                return sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])
+                
+                return self.wa_cost_price * self.shares
             else:
                 shares_left = bid.shares
                 temp_cost = 0
@@ -283,7 +296,7 @@ class Position:
                     else:
                         self.purchase_history[price] -= shares_left
                         temp_cost += price * shares_left
-                self.wa_cost_price = sum([i*j for i,j in zip(self.purchase_history.keys(),self.purchase_history.values())])/self.shares
+                self.wa_cost_price = sum([i*j for i,j in self.purchase_history.items()])/self.shares
                 return temp_cost
                     
   
