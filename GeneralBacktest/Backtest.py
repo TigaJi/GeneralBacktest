@@ -9,8 +9,8 @@ from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 from oauth2client.service_account import ServiceAccountCredentials
 import matplotlib.pyplot as plt
-from GeneralBacktest.position import Position
-from GeneralBacktest.bid import Bid
+from .position import Position
+from .bid import Bid
 
 class Backtest:
     """
