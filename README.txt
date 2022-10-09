@@ -1,0 +1,1 @@
+A simplt, realistic tool to backtest trading strategies.
