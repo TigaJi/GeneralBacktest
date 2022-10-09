@@ -1,4 +1,4 @@
-import Bid
+from Bid import Bid
 
 
 class Position:
