@@ -1,3 +1,5 @@
+from tokenize import String
+
 class Bid:
     """
     Bid Class    
