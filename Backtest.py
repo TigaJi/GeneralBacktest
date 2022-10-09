@@ -6,11 +6,11 @@ import os
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 from oauth2client.service_account import ServiceAccountCredentials
+import matplotlib.pyplot as plt
+
 
 class Backtest:
-    def __init__(self,price_data,strategy,initial_amount = 100000, has_tc = True):
-        
-        
+    def __init__(self,price_data,strategy,initial_amount = 100000, has_tc = True, full_data = None):
         if self.check_input_data(price_data) == True:
             self.df = price_data
         else:
@@ -37,7 +37,14 @@ class Backtest:
         #dfs to record
         self.transaction_history = pd.DataFrame(columns = ["dt","ticker","type","price","shares","amount","cash_left","transaction_cost","pnl"])
         self.portfolio_tracker = pd.DataFrame(columns = ["dt","bid_count","position_count","cash_value","positions_value","total_value","bah"])
-        self.portfolio_tracker.loc[0] = [self.df.index[0],0,0,self.cash,0,self.cash,self.cash]
+        #self.portfolio_tracker.loc[0] = [self.df.index[0],0,0,self.cash,0,self.cash,self.cash]
+        
+        #a dataframe contains predictions, used for model test
+        if full_data != None:
+            self.full_data = full_data
+        else:
+            self.full_data  = pd.DataFrame(index = self.df.index)
+
     
     def check_input_data(self,df):
         if df.index.inferred_type != "datetime64":
@@ -49,25 +56,12 @@ class Backtest:
         return True
 
 
-    def get_latest_value(self):
-        if len(self.portfolio_tracker) == 0:
-            return self.cash
-        else:
-            return self.portfolio_tracker['total_value'].values[-1]
-
     def update_positions(self,ti):
         current_price = self.df.loc[ti]
         for position in list(self.positions.values()):
             position.price = current_price[position.ticker]
     
-    def show_status(self):
-        print("cash: {}".format(self.cash))
-        print("# of positions: {}".format(len(self.positions)))
-        
-        for pos in self.positions.values():
-            pos.show()
-        total_position_value = sum([pos.price*pos.shares for pos in self.positions.values()])
-        print("total_position_value: {}".format(total_position_value))
+
     
     def record_transaction(self,ti,bid,pnl):
         record = [ti,bid.ticker,bid.bid_type,bid.price,bid.shares,bid.price*bid.shares,self.cash,bid.price*bid.shares*self.tc,pnl]
@@ -79,7 +73,14 @@ class Backtest:
         positions_value = sum([pos.price*pos.shares for pos in self.positions.values()])
         record = [ti,len(bid_list),len(positions),cash,positions_value,positions_value+cash,bah_value]
         self.portfolio_tracker.loc[len(self.portfolio_tracker)] = record
-    
+
+    def clear_positions(self):
+        bid_list = []
+        for pos in self.positions.values():
+            bid = Bid(ticker = pos.ticker,shares = pos.shares,price = self.df.iloc[-1][pos.ticker],bid_type = 0)
+            bid_list.append(bid)
+        self.process_bids(bid_list)
+
     def upload_to_dashboard(self,name):
         if len(self.portfolio_tracker) < len(self.df):
             print("Unable to upload: Backtest is unfinished.")
@@ -162,7 +163,6 @@ class Backtest:
                     
                     
                     if pos.shares == 0:
-                        del pos
                         del self.positions[bid.ticker]
 
             #if not have a position yet
@@ -185,32 +185,31 @@ class Backtest:
         
         
         
-        
-    
+    def plot(self):
+        plt.figure()
+        plt.plot(self.portfolio_tracker['total_value'], label = 'random_strat')
+        plt.plot(self.portfolio_tracker['bah'],label = 'bah')
+        plt.legend()
+        plt.show()
     
     def backtest_step(self):
         #current ti
         ti = self.df.index[self.current]
         
         self.update_positions(ti)
-        bid_list = self.strategy(ti,self.df.loc[:ti],self.positions,self.cash)
+        bid_list = self.strategy.predict(ti,self.df.loc[:ti],self.positions,self.cash,self.full_data.loc[:ti])
         self.process_bids(bid_list = bid_list,ti = ti)
         self.current+=1
-        
-        
-        
-        
-        
-        
         
         
         
     def backtest_full(self):
         for ti in self.df.index:
             self.update_positions(ti)
-            bid_list = self.strategy(ti,self.df.loc[:ti],self.positions,self.cash)
+            bid_list = self.strategy.predict(ti,self.df.loc[:ti],self.positions,self.cash,self.full_data.loc[:ti])
             self.process_bids(bid_list = bid_list,ti = ti)
-    
+        if len(self.positions) > 0:
+            self.clear_positions()
 
 class Bid:
     def __init__(self,ticker,price,shares,bid_type):
@@ -241,17 +240,18 @@ class Position:
         self.price = bid.price
         
         #k，v: price, number of shares purchased at that price
-        self.purchase_history = {}
+        self.purchase_history = {bid.price:bid.shares}
         self.wa_cost_price = bid.price
-        self.update_cost(bid)
+        
 
 
 
     def change_position(self,bid):
         self.price = bid.price
         if bid.bid_type == 1:
-            self.shares += bid.shares
+            
             self.update_cost(bid)
+            self.shares += bid.shares
             
         
         if bid.bid_type == 0:
@@ -260,8 +260,10 @@ class Position:
                 return 0
 
             
-            return self.update_cost(bid)
+            cost = self.update_cost(bid)
             self.shares -= bid.shares
+            return cost
+            
 
 
         
@@ -273,7 +275,8 @@ class Position:
                 self.purchase_history[bid.price] += bid.shares
             else:
                 self.purchase_history[bid.price] = bid.shares
-            self.wa_cost_price = sum([i*j for i,j in self.purchase_history.items()])/self.shares
+            self.wa_cost_price = sum([i*j for i,j in self.purchase_history.items()])/(self.shares+bid.shares)
+
             
             
                 
@@ -282,8 +285,8 @@ class Position:
             
             #if empty position
             if bid.shares == self.shares:
+
                 #weighted average
-                
                 return self.wa_cost_price * self.shares
             else:
                 shares_left = bid.shares
@@ -296,9 +299,9 @@ class Position:
                     else:
                         self.purchase_history[price] -= shares_left
                         temp_cost += price * shares_left
-                self.wa_cost_price = sum([i*j for i,j in self.purchase_history.items()])/self.shares
+                self.wa_cost_price = sum([i*j for i,j in self.purchase_history.items()])/(self.shares-bid.shares)
                 return temp_cost
-                    
+                   
   
     def show(self):
         print("Ticker: {}".format(self.ticker))
