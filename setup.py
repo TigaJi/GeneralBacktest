@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     # Needed to silence warnings (and to be a worthwhile package)
     name='GeneralBacktest',
-    url='https://github.com/TigaJi/General-Backtest',
+    url='https://github.com/TigaJi/GeneralBacktest',
     author='Dailin Ji',
     author_email='dj2194@nyu.edu',
     # Needed to actually package something
