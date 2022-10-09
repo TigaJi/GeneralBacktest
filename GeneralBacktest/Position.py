@@ -1,4 +1,4 @@
-#from Bid import Bid
+from GeneralBacktest.bid import Bid
 
 
 class Position:
