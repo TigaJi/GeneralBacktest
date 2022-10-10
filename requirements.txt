@@ -1,0 +1,4 @@
+pydrive
+pandas
+numpy
+oauth2client
