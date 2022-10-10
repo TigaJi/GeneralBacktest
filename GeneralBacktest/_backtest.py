@@ -219,13 +219,18 @@ class Backtest:
         cash_change = 0
 
         for bid in bid_list:
-            
+            if bid.shares <= 0:
+                print("#shares of {} is invaild".format(bid.shares))
+                continue
+
+
+
             if bid.ticker not in self.df.columns:
                 print("Ticker: {} is unavaliable.".format(bid.ticker))
                 continue
 
             if bid.price != self.df.loc[ti][bid.ticker]:
-                print("Unmatch price: bid.price {}, actual price {}".format(bid.price,self.df.iloc[ti][bid.ticker]))
+                print("Unmatch price: bid.price {}, actual price {}".format(bid.price,self.df.loc[ti][bid.ticker]))
                 continue
 
             #if already have a position
