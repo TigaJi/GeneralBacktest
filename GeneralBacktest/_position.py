@@ -36,6 +36,9 @@ class Position:
 
     """
     def __init__(self,bid: Bid):
+        if bid.bid_type == 0:
+            print("Try to sell {} shares, but only got 0 shares.".format(bid.shares))
+            return -1
         self.ticker = bid.ticker
         self.shares = bid.shares
         self.price = bid.price

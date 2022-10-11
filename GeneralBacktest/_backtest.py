@@ -272,8 +272,12 @@ class Backtest:
 
             #if not have a position yet
             else:
-                cost = bid.shares * bid.price
+                if bid.bid_type == 0:
+                    print("Try to sell {} shares, but only got 0 shares.".format(bid.shares))
+                    continue
 
+
+                cost = bid.shares * bid.price
 
                 #update cash
                 cash_change -= cost * (1+self.tc)
