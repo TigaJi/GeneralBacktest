@@ -11,7 +11,6 @@ from oauth2client.service_account import ServiceAccountCredentials
 import matplotlib.pyplot as plt
 from ._position import Position
 from ._bid import Bid
-from tqdm import tqdm
 
 class Backtest:
 
@@ -311,7 +310,7 @@ class Backtest:
         print("====================Start====================")
         print()
 
-        for ti in tqdm(self.df.index,position = 0, leave = True):
+        for ti in self.df.index:
             self.update_positions(ti)
             bid_list = self.strategy.predict(ti,self.df.loc[:ti],self.positions,self.cash,self.full_data.loc[:ti])
             cash_change = self.process_bids(bid_list = bid_list,ti = ti)
