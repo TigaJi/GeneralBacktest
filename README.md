@@ -12,13 +12,13 @@ pip install git+https://github.com/TigaJi/GeneralBacktest#egg=GeneralBacktest
 
 ## Sample
 
-# Import
+## Import
 ```python
 From GeneralBacktest import Backtest, Position, Bid
 ```
 
-# A demo strategy
-# buy 100 shares of 'AAPL' every Monday, sell on Friday
+## A demo strategy
+## buy 100 shares of 'AAPL' every Monday, sell on Friday
 ```python
 class DemoStrategy:
     def predict(ti,df,positions,cash,full_data):
@@ -37,7 +37,7 @@ class DemoStrategy:
         return bid_list
 ```
 
-# Test
+## Test
 ```python
 #load a sample dataset
 data = pd.read_csv("test_data.csv", index_col = 0)
@@ -52,7 +52,4 @@ demo.backtest_full()
     
 ## A detailed example
 For more detailed examples and illstruations,please check this [notebook]
-()
-
-## License
-[MIT](https://choosealicense.com/licenses/mit/)
+(https://github.com/TigaJi/GeneralBacktest/blob/main/Demo/demos.ipynb)
