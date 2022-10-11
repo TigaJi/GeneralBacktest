@@ -1,3 +1,0 @@
-# GeneralBacktest package
-
-## Module contents
