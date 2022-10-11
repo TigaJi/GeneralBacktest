@@ -51,4 +51,4 @@ demo.backtest_full()
 ```
     
 ## A detailed example
-For more detailed illstruations,please check this [notebook](https://github.com/TigaJi/GeneralBacktest/blob/main/Demo/demos.ipynb)
+For more detailed illstruations,please check this [notebook](https://github.com/TigaJi/GeneralBacktest/blob/main/Demo/demo.ipynb)
