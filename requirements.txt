@@ -1,5 +1,4 @@
 pydrive
 pandas
-tqdm
 numpy
 oauth2client
