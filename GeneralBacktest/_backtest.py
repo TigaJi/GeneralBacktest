@@ -11,6 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import matplotlib.pyplot as plt
 from ._position import Position
 from ._bid import Bid
+from tqdm import tqdm
 
 class Backtest:
 
@@ -90,6 +91,9 @@ class Backtest:
         df: pandas DataFrame
 
         """
+
+
+
         if df.index.inferred_type != "datetime64":
             raise ValueError("input dataframe must have a datetime64 index")
 
@@ -99,6 +103,8 @@ class Backtest:
 
 
     def update_positions(self,ti:pd.DatetimeIndex):
+
+        """"""
         """
         update positions' latest price
 
@@ -302,7 +308,10 @@ class Backtest:
         
         
     def backtest_full(self):
-        for ti in self.df.index:
+        print("====================Start====================")
+        print()
+
+        for ti in tqdm(self.df.index):
             self.update_positions(ti)
             bid_list = self.strategy.predict(ti,self.df.loc[:ti],self.positions,self.cash,self.full_data.loc[:ti])
             cash_change = self.process_bids(bid_list = bid_list,ti = ti)
@@ -313,4 +322,5 @@ class Backtest:
 
         if len(self.positions) > 0:
             self.clear_positions()
+
 
