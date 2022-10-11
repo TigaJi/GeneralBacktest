@@ -2,6 +2,7 @@ from ._bid import Bid
 
 
 class Position:
+
     """
     Position Class    
     
@@ -45,18 +46,17 @@ class Position:
         
 
     def change_position(self,bid: Bid) -> float:
-        """
-        Parameters
-        ----------
-        a Bid instance
+        """Alter the current position given a new bid on this ticker
 
-        Returns
-        -------
-        if buying: return -1
-        if selling:
-            if succesful: return the cost, more details in the update_cost function
-            if not succesful: return -1
-        """
+        :param bid: a Bid instance
+        :type bid: Bid
+        :return: 
+            if buying: return -1
+            if selling:
+                if succesful: return the cost, more details in the update_cost function
+                if not succesful: return -1
+        :rtype: float
+        """       
 
         #update price
         self.price = bid.price
@@ -85,21 +85,19 @@ class Position:
 
         
     def update_cost(self,bid:Bid) -> float:
-        """
-        Parameters
-        ----------
-        a Bid instance
+        """_summary_
 
-        Returns
-        -------
-        if buying: return -1
-        if selling: return the cost, i.e. dollar value used to purchase those amount of shares
-        
-        Notes
-        -------
-        if the all the shares are sold, the cost will be shares * wa_cost_price
-        However, if only a portion of the postition is sold, the calculation of cost follows the Fisrt-In-Lowest-Out rule
-        The lowest possible cost will be calculated from the purchase_histroy dictionary to maximize the pnl for this single trade
+        Args:
+            bid (Bid): a Bid instance
+
+        Returns:
+            float: if buying,returns -1; if selling, return the cost, i.e. dollar value used to purchase those amount of shares
+
+        Notes:
+
+            if the all the shares are sold, the cost will be shares * wa_cost_price
+            However, if only a portion of the postition is sold, the calculation of cost follows the Fisrt-In-Lowest-Out rule
+            The lowest possible cost will be calculated from the purchase_histroy dictionary to maximize the pnl for this single trade
 
         """
 
