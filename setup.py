@@ -15,5 +15,5 @@ setup(
     # The license can be anything you like
     license='SUPR',
     description='A simple, realistic tool to backtest trading strategies.',
-    long_description=open('README.txt').read(),
+    long_description=open('README.md').read(),
 )
