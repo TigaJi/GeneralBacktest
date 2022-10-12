@@ -2,6 +2,9 @@
 
 A simple, realistic package to backtest trading strategies
 
+## Author: Dailin Ji
+## Email: dj2194@nyu.edu
+
 ## Installation
 
 Install from github
