@@ -19,18 +19,38 @@ From GeneralBacktest import Backtest, Position, Bid
 
 ## A demo strategy
 ## buy 100 shares of 'AAPL' every Monday, sell on Friday
+
 ```python
 class DemoStrategy:
+    
     def predict(ti,df,positions,cash,full_data):
+        """A function that will be called at every ti that returns a list of bids(orders)
+
+        Args:
+            ti (pd.DatetimeIndex): current time
+            df (pd.DataFrame): all history prices up to ti
+            cash (float): starting cash at this round
+            full_data(pd.DataFrame): OHLCV up to this ti, optional to be empty
+
+        Returns:
+            a list of Bid instances to execute at this round
+        
+        """
+
+        
         bid_list = []
 
+        # if Monday
         if ti.weekday() == 0:
-            bid = Bid(ticker = 'AAPL', shares = 100, price = df.iloc[-1]['AAPL'],bid_type = 1)
+            price = df.iloc[-1]['AAPL'] #AAPL's current price
+            bid = Bid(ticker = 'AAPL', shares = 100, price = price,bid_type = 1)
 
             bid_list.append(bid)
         
+        #if Friday
         if ti.weekday() == 4:
-            bid = Bid(ticker = 'AAPL', shares = 100, price = df.iloc[-1]['AAPL'],bid_type = 0)
+            price = df.iloc[-1]['AAPL'] #AAPL's current price
+            bid = Bid(ticker = 'AAPL', shares = 100, price = price,bid_type = 0)
 
             bid_list.append(bid)
         
