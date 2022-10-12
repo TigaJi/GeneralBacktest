@@ -1,4 +1,5 @@
 
+from ast import Return
 from tokenize import String
 import pandas as pd
 import numpy as np
@@ -159,6 +160,7 @@ class Backtest:
         for pos in self.positions.values():
             bid = Bid(ticker = pos.ticker,shares = pos.shares,price = self.df.iloc[-1][pos.ticker],bid_type = 0)
             bid_list.append(bid)
+
         self.process_bids(self.df.index[-1],bid_list)
 
 
@@ -308,7 +310,7 @@ class Backtest:
         
     def backtest_full(self):
         print("====================Start====================")
-        print()
+        
 
         for ti in self.df.index:
             self.update_positions(ti)
@@ -318,9 +320,14 @@ class Backtest:
             self.update_tracker(ti,bid_list)
             if self.cash<0:
                 raise ValueError("Negative cash. Please reconstruct your strategy.")
+        
 
         if len(self.positions) > 0:
             self.clear_positions()
+
+
+        ret = round((self.portfolio_tracker['total_value'].iloc[-1] - self.initial_amount) /self.initial_amount,4)
+        print("Finished, Final Return = {}".format(ret))
     
 
 
