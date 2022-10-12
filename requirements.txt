@@ -1,4 +1,4 @@
-pydrive
+#pydrive optional for dashboard usage
 pandas
 numpy
-oauth2client
+#oauth2client optional for dashboard usage
