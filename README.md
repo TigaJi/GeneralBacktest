@@ -2,8 +2,7 @@
 
 A simple, realistic package to backtest trading strategies
 
-## Author: Dailin Ji
-## Email: dj2194@nyu.edu
+## Author Email: dj2194@nyu.edu
 
 ## Installation
 
