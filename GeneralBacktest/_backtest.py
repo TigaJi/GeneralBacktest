@@ -299,8 +299,8 @@ class Backtest:
         
     def plot(self):
         plt.figure()
-        plt.plot(self.portfolio_tracker['total_value'], label = 'random_strat')
-        plt.plot(self.portfolio_tracker['bah'],label = 'bah')
+        plt.plot(self.portfolio_tracker['total_value'], label = 'Strategy')
+        plt.plot(self.portfolio_tracker['bah'],label = 'BAH')
         plt.legend()
         plt.show()
         
@@ -321,5 +321,9 @@ class Backtest:
 
         if len(self.positions) > 0:
             self.clear_positions()
+    
+
+
+
 
 

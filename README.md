@@ -1,6 +1,6 @@
 # GeneralBacktest
 
-A simple, realitic package to backtest trading strategies
+A simple, realistic package to backtest trading strategies
 
 ## Installation
 
